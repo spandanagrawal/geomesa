@@ -32,6 +32,11 @@ public class JSimpleFeatureFilter extends FilterBase {
     }
 
     public JSimpleFeatureFilter(SimpleFeatureType sft, org.opengis.filter.Filter filter) {
+
+        System.out.println("Adding HBase Feature Filter with");
+        System.out.println("\tSFT: " + sft.toString());
+        System.out.println("\tFilter: " + ECQL.toCQL(filter));
+
         this.sft = sft;
         this.filter = filter;
     }

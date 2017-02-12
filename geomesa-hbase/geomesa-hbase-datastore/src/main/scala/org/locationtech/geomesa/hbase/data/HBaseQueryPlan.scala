@@ -62,7 +62,9 @@ case class ScanPlan(sft: SimpleFeatureType,
                     clientSideFilter: Option[Filter],
                     entriesToFeatures: Iterator[Result] => Iterator[SimpleFeature]) extends HBaseQueryPlan {
   override def scan(ds: HBaseDataStore): CloseableIterator[SimpleFeature] = {
-    val remoteFilters = filter.filter.map ( new JSimpleFeatureFilter(sft, _)).toSeq
+    val remoteFilters = filter.filter.map { filter =>
+      new JSimpleFeatureFilter(sft, filter)
+    }.toSeq
     val results = new BatchScan(ds.connection, table, ranges, ds.config.queryThreads, 100000, remoteFilters)
     SelfClosingIterator(entriesToFeatures(results), results.close)
   }
