@@ -67,15 +67,17 @@ started. Now, download the GeoMesa HBase distribution.
 
 .. code-block:: shell
 
-   $ wget https://repo.locationtech.org/content/repositories/geomesa-releases/org/locationtech/geomesa/geomesa-hbase-dist_2.11/${VERSION}/geomesa-hbase-dist_2.11-${VERSION}-bin.tar.gz -o /tmp/geomesa-hbase-dist_2.11-${VERSION}-bin.tar.gz
+   $ wget https://repo.locationtech.org/content/repositories/geomesa-releases/org/locationtech/geomesa/geomesa-hbase_2.11/${VERSION}/geomesa-hbase_2.11-${VERSION}-bin.tar.gz -o /tmp/geomesa-hbase_2.11-${VERSION}-bin.tar.gz
    $ cd /opt
-   $ sudo tar zxvf /tmp/geomesa-hbase-dist_2.11-${VERSION}-bin.tar.gz
+   $ sudo tar zxvf /tmp/geomesa-hbase_2.11-${VERSION}-bin.tar.gz
 
 Then, bootstrap GeoMesa on HBase on S3 by executing the provided script
 
 .. code-block:: shell
 
-   $ sudo /opt/geomesa/bin/bootstrap-geomesa-hbase.sh
+   $ sudo /opt/geomesa-hbase_2.11-${VERSION}/bin/bootstrap-geomesa-hbase.sh ${VERSION}
+
+Now, log out and back in and your environment will be set up appropriately.
  
 
 Ingest Public GDELT data
