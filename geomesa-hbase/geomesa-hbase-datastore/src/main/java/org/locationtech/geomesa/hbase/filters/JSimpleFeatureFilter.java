@@ -31,6 +31,11 @@ public class JSimpleFeatureFilter extends FilterBase {
         configureFilter();
     }
 
+    public JSimpleFeatureFilter(SimpleFeatureType sft, org.opengis.filter.Filter filter) {
+        this.sft = sft;
+        this.filter = filter;
+    }
+
     private void configureSFT() {
         sft = SimpleFeatureTypes.createType("QuickStart", sftString);
         serializer = new KryoFeatureSerializer(sft, null);
