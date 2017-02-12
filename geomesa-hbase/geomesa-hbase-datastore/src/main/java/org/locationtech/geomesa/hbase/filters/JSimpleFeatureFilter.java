@@ -3,14 +3,11 @@ package org.locationtech.geomesa.hbase.filters;
 import org.apache.hadoop.hbase.Cell;
 import org.apache.hadoop.hbase.CellUtil;
 import org.apache.hadoop.hbase.exceptions.DeserializationException;
-import org.apache.hadoop.hbase.filter.Filter.ReturnCode;
 import org.apache.hadoop.hbase.filter.FilterBase;
 import org.apache.hadoop.hbase.util.Bytes;
 import org.geotools.filter.text.cql2.CQLException;
 import org.geotools.filter.text.ecql.ECQL;
-import org.locationtech.geomesa.feature.FeatureEncoding;
-import org.locationtech.geomesa.feature.SimpleFeatureDecoder;
-import org.locationtech.geomesa.feature.SimpleFeatureDecoder$;
+import org.locationtech.geomesa.features.kryo.KryoFeatureSerializer;
 import org.locationtech.geomesa.utils.geotools.SimpleFeatureTypes;
 import org.opengis.feature.simple.SimpleFeature;
 import org.opengis.feature.simple.SimpleFeatureType;
@@ -20,7 +17,7 @@ import java.io.IOException;
 public class JSimpleFeatureFilter extends FilterBase {
     String sftString;
     SimpleFeatureType sft;
-    SimpleFeatureDecoder decoder;
+    KryoFeatureSerializer serializer;
 
     org.opengis.filter.Filter filter;
     String filterString;
@@ -36,7 +33,7 @@ public class JSimpleFeatureFilter extends FilterBase {
 
     private void configureSFT() {
         sft = SimpleFeatureTypes.createType("QuickStart", sftString);
-        decoder = SimpleFeatureDecoder$.MODULE$.apply(sft, FeatureEncoding.KRYO());
+        serializer = new KryoFeatureSerializer(sft, null);
     }
 
     private void configureFilter() {
@@ -53,7 +50,7 @@ public class JSimpleFeatureFilter extends FilterBase {
     public ReturnCode filterKeyValue(Cell v) throws IOException {
 
         byte[] encodedSF = CellUtil.cloneValue(v);
-        SimpleFeature sf = decoder.decode(encodedSF);
+        SimpleFeature sf = serializer.deserialize(encodedSF);
 
         System.out.println("Who: " + sf.getAttribute("Who") + " When: " + sf.getAttribute("When") +  " Where  " + sf.getAttribute("Where"));
 
@@ -70,6 +67,7 @@ public class JSimpleFeatureFilter extends FilterBase {
         return super.transformCell(v);
     }
 
+    // TODO: Add static method to compute byte array from SFT and Filter.
     @Override
     public byte[] toByteArray() throws IOException {
       return Bytes.add(getLengthArray(sftString), getLengthArray(filterString));
