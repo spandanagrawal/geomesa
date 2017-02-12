@@ -11,6 +11,7 @@ import org.locationtech.geomesa.features.kryo.KryoFeatureSerializer;
 import org.locationtech.geomesa.utils.geotools.SimpleFeatureTypes;
 import org.opengis.feature.simple.SimpleFeature;
 import org.opengis.feature.simple.SimpleFeatureType;
+import org.locationtech.geomesa.features.interop.SerializationOptions;
 
 import java.io.IOException;
 
@@ -23,27 +24,27 @@ public class JSimpleFeatureFilter extends FilterBase {
     String filterString;
 
     public JSimpleFeatureFilter(String sftString, String filterString) {
-        System.out.println("JSFF init sft: " + sftString + " : filter: " + filterString);
+//        System.out.println("JSFF init sft: " + sftString + " : filter: " + filterString);
         this.sftString = sftString;
         configureSFT();
-
         this.filterString = filterString;
         configureFilter();
     }
 
     public JSimpleFeatureFilter(SimpleFeatureType sft, org.opengis.filter.Filter filter) {
-
-        System.out.println("Adding HBase Feature Filter with");
-        System.out.println("\tSFT: " + sft.toString());
-        System.out.println("\tFilter: " + ECQL.toCQL(filter));
+//        System.out.println("Adding HBase Feature Filter with");
+//        System.out.println("\tSFT: " + sft.toString());
+//        System.out.println("\tFilter: " + ECQL.toCQL(filter));
 
         this.sft = sft;
         this.filter = filter;
+        this.sftString = SimpleFeatureTypes.encodeType(sft, true);
+        this.filterString = ECQL.toCQL(filter);
     }
 
     private void configureSFT() {
         sft = SimpleFeatureTypes.createType("QuickStart", sftString);
-        serializer = new KryoFeatureSerializer(sft, null);
+        serializer = new KryoFeatureSerializer(sft, SerializationOptions.withoutId());
     }
 
     private void configureFilter() {
@@ -58,12 +59,8 @@ public class JSimpleFeatureFilter extends FilterBase {
 
     @Override
     public ReturnCode filterKeyValue(Cell v) throws IOException {
-
         byte[] encodedSF = CellUtil.cloneValue(v);
         SimpleFeature sf = serializer.deserialize(encodedSF);
-
-        System.out.println("Who: " + sf.getAttribute("Who") + " When: " + sf.getAttribute("When") +  " Where  " + sf.getAttribute("Where"));
-
         if (filter == null || filter.evaluate(sf)) {
             // Accept if we have no filter or if the filter passes
             return ReturnCode.INCLUDE;
