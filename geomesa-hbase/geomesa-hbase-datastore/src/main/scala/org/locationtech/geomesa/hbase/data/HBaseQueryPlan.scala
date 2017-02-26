@@ -10,7 +10,7 @@ package org.locationtech.geomesa.hbase.data
 
 import org.apache.hadoop.hbase.TableName
 import org.apache.hadoop.hbase.client._
-import org.locationtech.geomesa.hbase.filters.JSimpleFeatureFilter
+import org.apache.hadoop.hbase.filter.{Filter => HBaseFilter}
 import org.locationtech.geomesa.hbase.utils.BatchScan
 import org.locationtech.geomesa.hbase.{HBaseFilterStrategyType, HBaseQueryPlanType}
 import org.locationtech.geomesa.index.utils.Explainer
@@ -60,11 +60,9 @@ case class ScanPlan(sft: SimpleFeatureType,
                     table: TableName,
                     ranges: Seq[Scan],
                     clientSideFilter: Option[Filter],
+                    remoteFilters: Seq[HBaseFilter] = Nil,
                     entriesToFeatures: Iterator[Result] => Iterator[SimpleFeature]) extends HBaseQueryPlan {
   override def scan(ds: HBaseDataStore): CloseableIterator[SimpleFeature] = {
-    val remoteFilters = filter.filter.map { filter =>
-      new JSimpleFeatureFilter(sft, filter)
-    }.toSeq
     val results = new BatchScan(ds.connection, table, ranges, ds.config.queryThreads, 100000, remoteFilters)
     SelfClosingIterator(entriesToFeatures(results), results.close)
   }

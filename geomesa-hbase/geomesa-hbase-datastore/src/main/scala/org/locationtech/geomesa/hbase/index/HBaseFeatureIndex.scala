@@ -1,24 +1,26 @@
-/***********************************************************************
-* Copyright (c) 2013-2016 Commonwealth Computer Research, Inc.
-* All rights reserved. This program and the accompanying materials
-* are made available under the terms of the Apache License, Version 2.0
-* which accompanies this distribution and is available at
-* http://www.opensource.org/licenses/apache2.0.php.
-*************************************************************************/
+/** *********************************************************************
+  * Copyright (c) 2013-2016 Commonwealth Computer Research, Inc.
+  * All rights reserved. This program and the accompanying materials
+  * are made available under the terms of the Apache License, Version 2.0
+  * which accompanies this distribution and is available at
+  * http://www.opensource.org/licenses/apache2.0.php.
+  * ************************************************************************/
 
 package org.locationtech.geomesa.hbase.index
 
 import org.apache.hadoop.hbase.client._
-import org.apache.hadoop.hbase.filter.KeyOnlyFilter
-import org.apache.hadoop.hbase.util.Bytes
+import org.apache.hadoop.hbase.filter.{KeyOnlyFilter, Filter => HBaseFilter}
 import org.apache.hadoop.hbase.{HColumnDescriptor, HTableDescriptor, TableName}
+import org.apache.hadoop.io.Text
 import org.geotools.factory.Hints
 import org.locationtech.geomesa.hbase._
 import org.locationtech.geomesa.hbase.data._
-import org.locationtech.geomesa.index.api.FilterStrategy
+import org.locationtech.geomesa.hbase.filters.JSimpleFeatureFilter
+import org.locationtech.geomesa.hbase.index.HBaseFeatureIndex.ScanConfig
 import org.locationtech.geomesa.index.index.ClientSideFiltering.RowAndValue
 import org.locationtech.geomesa.index.index.{ClientSideFiltering, IndexAdapter}
-import org.opengis.feature.simple.SimpleFeatureType
+import org.locationtech.geomesa.utils.collection.CloseableIterator
+import org.opengis.feature.simple.{SimpleFeature, SimpleFeatureType}
 import org.opengis.filter.Filter
 
 object HBaseFeatureIndex extends HBaseIndexManagerType {
@@ -30,15 +32,21 @@ object HBaseFeatureIndex extends HBaseIndexManagerType {
   override val CurrentIndices: Seq[HBaseFeatureIndex] =
     Seq(HBaseZ3Index, HBaseXZ3Index, HBaseZ2Index, HBaseXZ2Index, HBaseIdIndex, HBaseAttributeIndex)
 
-  val DataColumnFamily = Bytes.toBytes("d")
-  val DataColumnFamilyDescriptor = new HColumnDescriptor(DataColumnFamily)
+  val DataColumnFamily = new Text("d")
+  val DataColumnFamilyDescriptor = new HColumnDescriptor(DataColumnFamily.getBytes)
 
-  val DataColumnQualifier = Bytes.toBytes("d")
-  val DataColumnQualifierDescriptor = new HColumnDescriptor(DataColumnQualifier)
+  val DataColumnQualifier = new Text("d")
+  val DataColumnQualifierDescriptor = new HColumnDescriptor(DataColumnQualifier.getBytes)
+
+  case class ScanConfig(hbaseFilters: Seq[HBaseFilter],
+                        columnFamily: Text,
+                        entriesToFeatures: Iterator[Result] => Iterator[SimpleFeature],
+                        reduce: Option[(CloseableIterator[SimpleFeature]) => CloseableIterator[SimpleFeature]])
+
 }
 
 trait HBaseFeatureIndex extends HBaseFeatureIndexType
-    with IndexAdapter[HBaseDataStore, HBaseFeature, Mutation, Query] with ClientSideFiltering[Result] {
+  with IndexAdapter[HBaseDataStore, HBaseFeature, Mutation, Query] with ClientSideFiltering[Result] {
 
   import HBaseFeatureIndex.{DataColumnFamily, DataColumnQualifier}
 
@@ -97,15 +105,17 @@ trait HBaseFeatureIndex extends HBaseFeatureIndexType
 
   override protected def scanPlan(sft: SimpleFeatureType,
                                   ds: HBaseDataStore,
-                                  filter: FilterStrategy[HBaseDataStore, HBaseFeature, Mutation],
+                                  filter: HBaseFilterStrategyType,
                                   hints: Hints,
                                   ranges: Seq[Query],
                                   ecql: Option[Filter]): HBaseQueryPlanType = {
-    import org.locationtech.geomesa.index.conf.QueryHints.RichHints
-
-    if (ranges.isEmpty) { EmptyPlan(filter) } else {
+    if (ranges.isEmpty) {
+      EmptyPlan(filter)
+    } else {
       val table = TableName.valueOf(getTableName(sft.getTypeName, ds))
-      val toFeatures = resultsToFeatures(sft, ecql, hints.getTransform)
+      val dedupe = hasDuplicates(sft, filter.primary)
+      val ScanConfig(hbaseFilters, cf, toFeatures, reduce) = scanConfig(sft, filter, hints, ecql, dedupe)
+
       if (ranges.head.isInstanceOf[Get]) {
         GetPlan(filter, table, ranges.asInstanceOf[Seq[Get]], ecql, toFeatures)
       } else {
@@ -114,9 +124,13 @@ trait HBaseFeatureIndex extends HBaseFeatureIndexType
         // since scans are executed by a thread pool, that should balance the work and keep all threads occupied
         val scansPerThread = 3
         val scans = ranges.asInstanceOf[Seq[Scan]]
-        val minScans = if (ds.config.queryThreads == 1) { 1 } else { ds.config.queryThreads * scansPerThread }
+        val minScans = if (ds.config.queryThreads == 1) {
+          1
+        } else {
+          ds.config.queryThreads * scansPerThread
+        }
         if (scans.length >= minScans) {
-          ScanPlan(sft, filter, table, scans, ecql, toFeatures)
+          ScanPlan(sft, filter, table, scans, ecql, hbaseFilters, toFeatures)
         } else {
           // split up the scans so that we get some parallelism
           val multiplier = math.ceil(minScans.toDouble / scans.length).toInt
@@ -124,21 +138,51 @@ trait HBaseFeatureIndex extends HBaseFeatureIndexType
             val splits = IndexAdapter.splitRange(scan.getStartRow, scan.getStopRow, multiplier)
             splits.map { case (start, stop) => new Scan(scan).setStartRow(start).setStopRow(stop) }
           }
-          ScanPlan(sft, filter, table, splitScans, ecql, toFeatures)
+          ScanPlan(sft, filter, table, splitScans, ecql, hbaseFilters, toFeatures)
         }
       }
     }
   }
 
   override protected def range(start: Array[Byte], end: Array[Byte]): Query =
-    new Scan(start, end).addColumn(DataColumnFamily, DataColumnQualifier)
+    new Scan(start, end).addColumn(DataColumnFamily.getBytes, DataColumnQualifier.getBytes)
 
   override protected def rangeExact(row: Array[Byte]): Query =
-    new Get(row).addColumn(DataColumnFamily, DataColumnQualifier)
+    new Get(row).addColumn(DataColumnFamily.getBytes, DataColumnQualifier.getBytes)
 
   override protected def rowAndValue(result: Result): RowAndValue = {
     val cell = result.rawCells()(0)
     RowAndValue(cell.getRowArray, cell.getRowOffset, cell.getRowLength,
       cell.getValueArray, cell.getValueOffset, cell.getValueLength)
+  }
+
+  protected def hasDuplicates(sft: SimpleFeatureType, filter: Option[Filter]): Boolean = false
+
+
+  /**
+    * Sets up everything needed to execute the scan - iterators, column families, deserialization, etc
+    *
+    * @param sft    simple feature type
+    * @param hints  query hints
+    * @param ecql   secondary filter being applied, if any
+    * @param dedupe scan may have duplicate results or not
+    * @return
+    */
+  protected def scanConfig(sft: SimpleFeatureType,
+                           filter: HBaseFilterStrategyType,
+                           hints: Hints,
+                           ecql: Option[Filter],
+                           dedupe: Boolean): ScanConfig = {
+
+    import HBaseFeatureIndex.{DataColumnFamily}
+    import org.locationtech.geomesa.index.conf.QueryHints.RichHints
+
+    val toFeatures = resultsToFeatures(sft, ecql, hints.getTransform)
+    val remoteFilters = filter.filter.map { filter =>
+      new JSimpleFeatureFilter(sft, filter)
+    }.toSeq
+
+    ScanConfig(remoteFilters, DataColumnFamily, toFeatures, None)
+
   }
 }
