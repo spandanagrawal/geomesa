@@ -114,12 +114,13 @@ class HBaseFilterTest extends Specification with LazyLogging {
       println(" ** Starting second scan ** ")
 
       val scan2 = new BatchScan(connection, table, Seq(scanRange), 2, 100000, Seq(filter))
+      val foo = scan2.hasNext
       val results2 = scan2.map { result =>
         val RowAndValue(row, rowOffset, rowLength, value, valueOffset, valueLength) = rowAndValue(result)
         val sf: SimpleFeature = deserializer.deserialize(value, valueOffset, valueLength)
         sf
       }
-      results2.foreach { f => println(f.getID) }
+      results2.foreach { f => println(s"ID: ${f.getID} name: ${f.getAttribute("name")}") }
 
 
       true mustEqual(true)

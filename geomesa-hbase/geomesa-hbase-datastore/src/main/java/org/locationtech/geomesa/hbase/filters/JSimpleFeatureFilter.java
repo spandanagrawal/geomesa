@@ -77,7 +77,8 @@ public class JSimpleFeatureFilter extends FilterBase {
     // TODO: Add static method to compute byte array from SFT and Filter.
     @Override
     public byte[] toByteArray() throws IOException {
-      return Bytes.add(getLengthArray(sftString), getLengthArray(filterString));
+        System.out.println("Serializing JSimpleFeatureFilter!");
+        return Bytes.add(getLengthArray(sftString), getLengthArray(filterString));
     }
 
     private byte[] getLengthArray(String s) {
@@ -95,6 +96,8 @@ public class JSimpleFeatureFilter extends FilterBase {
     }
 
     public static org.apache.hadoop.hbase.filter.Filter parseFrom(final byte [] pbBytes) throws DeserializationException {
+        System.out.println("Creating JSimpleFeatureFilter with parseFrom!");
+
         int sftLen =  Bytes.readAsInt(pbBytes, 0, 4);
         String sftString = new String(Bytes.copy(pbBytes, 4, sftLen));
 

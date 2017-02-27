@@ -163,6 +163,7 @@ trait HBaseFeatureIndex extends HBaseFeatureIndexType
     * Sets up everything needed to execute the scan - iterators, column families, deserialization, etc
     *
     * @param sft    simple feature type
+    * @param filter hbase filter strategy type
     * @param hints  query hints
     * @param ecql   secondary filter being applied, if any
     * @param dedupe scan may have duplicate results or not
@@ -176,6 +177,10 @@ trait HBaseFeatureIndex extends HBaseFeatureIndexType
 
     import HBaseFeatureIndex.{DataColumnFamily}
     import org.locationtech.geomesa.index.conf.QueryHints.RichHints
+
+    /** needs to handle remote filter aspect being done by Arnesh **/
+    /** Needs to handle different filters based on the hint type **/
+    /** Still under constrution **/
 
     val toFeatures = resultsToFeatures(sft, ecql, hints.getTransform)
     val remoteFilters = filter.filter.map { filter =>
