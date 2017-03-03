@@ -182,17 +182,17 @@ trait HBaseFeatureIndex extends HBaseFeatureIndexType
     /** Needs to handle different filters based on the hint type **/
     /** Still under constrution **/
 
-    if (hints.isStatsIteratorQuery) {
+//    if (hints.isStatsIteratorQuery) {
 //      val iter = KryoLazyStatsIterator.configure(sft, this, ecql, hints, dedupe)
 //      val reduce = Some(KryoLazyStatsIterator.reduceFeatures(sft, hints)(_))
 //      ScanConfig(Seq(iter), FullColumnFamily, KryoLazyStatsIterator.kvsToFeatures(sft), reduce)
-    } else {
+//    } else {
       val toFeatures = resultsToFeatures(sft, ecql, hints.getTransform)
       val remoteFilters = filter.filter.map { filter =>
         new JSimpleFeatureFilter(sft, filter)
       }.toSeq
       ScanConfig(remoteFilters, DataColumnFamily, toFeatures, None)
-    }
+//    }
 
 
   }
