@@ -9,12 +9,14 @@
 package org.locationtech.geomesa.hbase.filters;
 
 import org.apache.hadoop.hbase.Cell;
+import org.apache.hadoop.hbase.KeyValue;
 import org.apache.hadoop.hbase.exceptions.DeserializationException;
 import org.apache.hadoop.hbase.filter.FilterBase;
 import org.apache.hadoop.hbase.util.Bytes;
 import org.geotools.filter.text.cql2.CQLException;
 import org.geotools.filter.text.ecql.ECQL;
 import org.locationtech.geomesa.features.interop.SerializationOptions;
+import org.locationtech.geomesa.features.kryo.KryoBufferSimpleFeature;
 import org.locationtech.geomesa.features.kryo.KryoFeatureSerializer;
 import org.locationtech.geomesa.utils.geotools.SimpleFeatureTypes;
 import org.opengis.feature.simple.SimpleFeature;
@@ -30,10 +32,17 @@ public class JSimpleFeatureFilter extends FilterBase {
     private org.opengis.filter.Filter filter;
     private String filterString;
 
-    public JSimpleFeatureFilter(String sftString, String filterString) {
+    private String transform;
+    private String transformSchema;
+    private Boolean hasTransform;
+    private KryoBufferSimpleFeature reusableSf;
+
+    public JSimpleFeatureFilter(String sftString,
+                                String filterString,
+                                String transform,
+                                String transformSchema) {
         this.sftString = sftString;
         sft = SimpleFeatureTypes.createType("", sftString);
-        serializer = new KryoFeatureSerializer(sft, SerializationOptions.withoutId());
 
         this.filterString = filterString;
         if (filterString != null && filterString != "") {
@@ -43,13 +52,32 @@ public class JSimpleFeatureFilter extends FilterBase {
                 throw new IllegalArgumentException(e);
             }
         }
+
+        setTransformVars(transform, transformSchema);
     }
 
-    public JSimpleFeatureFilter(SimpleFeatureType sft, org.opengis.filter.Filter filter) {
+    public JSimpleFeatureFilter(SimpleFeatureType sft,
+                                org.opengis.filter.Filter filter,
+                                String transform,
+                                String transformSchema) {
         this.sft = sft;
         this.filter = filter;
         this.sftString = SimpleFeatureTypes.encodeType(sft, true);
         this.filterString = ECQL.toCQL(filter);
+        setTransformVars(transform, transformSchema);
+    }
+
+    private void setTransformVars(String transform, String transformSchema) {
+        this.serializer = new KryoFeatureSerializer(sft, SerializationOptions.withoutId());
+        this.transformSchema = transformSchema;
+        this.transform = transform;
+        this.reusableSf = serializer.getReusableFeature();
+        if(transform == null || transformSchema == null) {
+            this.hasTransform = false;
+        } else {
+            this.hasTransform = true;
+            this.reusableSf.setTransforms(transform, this.sft);
+        }
     }
 
     @Override
@@ -68,7 +96,11 @@ public class JSimpleFeatureFilter extends FilterBase {
 
     @Override
     public Cell transformCell(Cell v) throws IOException {
-        return super.transformCell(v);
+        if(hasTransform) {
+            return new KeyValue(reusableSf.transform());
+        } else {
+            return super.transformCell(v);
+        }
     }
 
     // TODO: Add static method to compute byte array from SFT and Filter.
@@ -101,7 +133,6 @@ public class JSimpleFeatureFilter extends FilterBase {
         int filterLen = Bytes.readAsInt(pbBytes, sftLen + 4, 4);
         String filterString = new String(Bytes.copy(pbBytes, sftLen + 8, filterLen));
 
-        return new JSimpleFeatureFilter(sftString, filterString);
+        return new JSimpleFeatureFilter(sftString, filterString, null, null);
     }
-
 }
