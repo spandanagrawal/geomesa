@@ -8,6 +8,8 @@
 
 package org.locationtech.geomesa.hbase.data
 
+import java.util.Date
+
 import com.typesafe.scalalogging.LazyLogging
 import org.apache.hadoop.hbase.HBaseTestingUtility
 import org.apache.hadoop.hbase.client.Connection
@@ -19,6 +21,7 @@ import org.geotools.filter.text.ecql.ECQL
 import org.junit.runner.RunWith
 import org.locationtech.geomesa.features.ScalaSimpleFeature
 import org.locationtech.geomesa.hbase.data.HBaseDataStoreParams._
+import org.locationtech.geomesa.index.geotools.GeoMesaFeatureReader
 import org.locationtech.geomesa.utils.collection.SelfClosingIterator
 import org.locationtech.geomesa.utils.geotools.SimpleFeatureTypes
 import org.opengis.feature.simple.SimpleFeature
@@ -75,7 +78,9 @@ class HBaseDataStoreTest extends Specification with LazyLogging {
 
       forall(Seq(true, false)) { loose =>
         val ds = DataStoreFinder.getDataStore(params ++ Map(LooseBBoxParam.getName -> loose)).asInstanceOf[HBaseDataStore]
+        logger.debug(s"Starting loose = $loose queries")
         forall(Seq(null, Array("geom"), Array("geom", "dtg"), Array("geom", "name"))) { transforms =>
+          logger.debug(s"Starting queries with transforms = $transforms.")
           testQuery(ds, typeName, "INCLUDE", transforms, toAdd)
           testQuery(ds, typeName, "IN('0', '2')", transforms, Seq(toAdd(0), toAdd(2)))
           testQuery(ds, typeName, "bbox(geom,38,48,52,62) and dtg DURING 2014-01-01T00:00:00.000Z/2014-01-08T12:00:00.000Z", transforms, toAdd.dropRight(2))
@@ -141,9 +146,9 @@ class HBaseDataStoreTest extends Specification with LazyLogging {
   }
 
   def testQuery(ds: HBaseDataStore, typeName: String, filter: String, transforms: Array[String], results: Seq[SimpleFeature]): MatchResult[Any] = {
-    println(s"Running Filter: $filter")
+    println(s"${new Date}: Running Filter: $filter")
     if(transforms != null) {
-      println("transforms: " + transforms)
+      println(s"transforms: " + transforms)
     }
     val query = new Query(typeName, ECQL.toFilter(filter), transforms)
     val fr = ds.getFeatureReader(query, Transaction.AUTO_COMMIT)
