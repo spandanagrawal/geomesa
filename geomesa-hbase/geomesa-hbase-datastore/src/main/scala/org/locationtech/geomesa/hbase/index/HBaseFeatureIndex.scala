@@ -191,24 +191,34 @@ trait HBaseFeatureIndex extends HBaseFeatureIndexType
 
     /** This function is used to implement custom client filters for HBase **/
 
-      val transform = hints.getTransform // will eventually be used to support remote transforms 
-      val feature = sft // will eventually be used to support remote transforms 
-      val query = if (remote) { None } else { ecql }
-      val toFeatures = resultsToFeatures(feature, query, transform)
+    val transform = hints.getTransform // will eventually be used to support remote transforms
+    val feature = sft // will eventually be used to support remote transforms
+    val query = if (remote) { None } else { ecql }
+    var toFeatures: (Iterator[Result]) => Iterator[SimpleFeature] = resultsToFeatures(sft, None, None)
+    var tdefArg = ""
+    var tsftArg = ""
 
-      var tdefArg = ""
-      var tsftArg = ""
+    transform.foreach { case (tdef, tsft) =>
+      tdefArg = tdef
+      tsftArg = SimpleFeatureTypes.encodeType(tsft)
+      toFeatures = resultsToFeatures(tsft, None, None)
+    }
 
-      transform.foreach { case (tdef, tsft) =>
+    val remoteFilters: Seq[HBaseFilter] = if (remote) { (ecql, transform) match {
+      case (Some(cql), Some((tdef, tsft))) =>
         tdefArg = tdef
         tsftArg = SimpleFeatureTypes.encodeType(tsft)
-      }
+        Seq(new JSimpleFeatureFilter(sft, cql, tdefArg, tsftArg))
+      case (None, Some((tdef, tsft))) =>
+        tdefArg = tdef
+        tsftArg = SimpleFeatureTypes.encodeType(tsft)
+        Seq(new JSimpleFeatureFilter(sft, Filter.INCLUDE, tdefArg, tsftArg))
+      case (Some(cql), None) =>
+        Seq(new JSimpleFeatureFilter(sft, cql, tdefArg, tsftArg))
+      case _ => Seq()
+    } } else { Nil }
 
-      val remoteFilters = if (remote) { ecql.map { filter =>
-        new JSimpleFeatureFilter(feature, filter, tdefArg, tsftArg)
-      }.toSeq } else { Nil }
-
-      ScanConfig(remoteFilters, toFeatures)
+    ScanConfig(remoteFilters, toFeatures)
   }
 
 }
