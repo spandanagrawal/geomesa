@@ -73,7 +73,7 @@ public class JSimpleFeatureFilter extends FilterBase {
         this.transformSchema = transformSchema;
         this.transform = transform;
         this.reusableSf = serializer.getReusableFeature();
-        if(transform == null || transformSchema == null) {
+        if(transform == null || transform.isEmpty() || transformSchema == null || transformSchema.isEmpty()) {
             this.hasTransform = false;
         } else {
             this.hasTransform = true;
