@@ -39,6 +39,8 @@ class HBaseDataStoreTest extends Specification with LazyLogging {
   val cluster = new HBaseTestingUtility()
   var connection: Connection = _
 
+  System.setProperty("geomesa.scan.ranges.target", "100")
+
   step {
     logger.info("Starting embedded hbase")
     cluster.startMiniCluster(1)
@@ -146,22 +148,29 @@ class HBaseDataStoreTest extends Specification with LazyLogging {
 
   def testQuery(ds: HBaseDataStore, typeName: String, filter: String, transforms: Array[String], results: Seq[SimpleFeature]) = {
     println(s"${new Date}: Running Filter: $filter")
-    if(transforms != null) {
-      println(s"transforms: " + transforms)
-    }
     val query = new Query(typeName, ECQL.toFilter(filter), transforms)
+
     val fr = ds.getFeatureReader(query, Transaction.AUTO_COMMIT)
+
+    println(s"${new Date}: Running Filter: $filter got fr")
+
     val features = SelfClosingIterator(fr).toList
+    println(s"${new Date}: Running Filter: $filter building attr list")
+
     val attributes = Option(transforms).getOrElse(ds.getSchema(typeName).getAttributeDescriptors.map(_.getLocalName).toArray)
+    println(s"${new Date}: Running Filter: $filter checking ID map")
+
     features.map(_.getID) must containTheSameElementsAs(results.map(_.getID))
+
+    println(s"${new Date}: Running Filter: $filter check each feature")
     forall(features) { feature =>
-      println("len1=" + feature.getAttributes.length + ", len2=" + attributes.length)
       feature.getAttributes must haveLength(attributes.length)
       forall(attributes.zipWithIndex) { case (attribute, i) =>
         feature.getAttribute(attribute) mustEqual feature.getAttribute(i)
         feature.getAttribute(attribute) mustEqual results.find(_.getID == feature.getID).get.getAttribute(attribute)
       }
     }
+    println(s"${new Date}: Running Filter: $filter check length")
     ds.getFeatureSource(typeName).getFeatures(query).size() mustEqual results.length
   }
 
