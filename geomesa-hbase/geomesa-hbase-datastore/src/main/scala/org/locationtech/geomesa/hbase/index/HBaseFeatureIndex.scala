@@ -178,22 +178,31 @@ trait HBaseFeatureIndex extends HBaseFeatureIndexType
 
     /** This function is used to implement custom client filters for HBase **/
       val transform = hints.getTransform
-//      val toFeatures = resultsToFeatures(sft, None, transform)
-      val toFeatures = resultsToFeatures(sft, None, None)
+
+      var toFeatures: (Iterator[Result]) => Iterator[SimpleFeature] = resultsToFeatures(sft, None, None)
       var tdefArg = ""
       var tsftArg = ""
 
       transform.foreach { case (tdef, tsft) =>
         tdefArg = tdef
         tsftArg = SimpleFeatureTypes.encodeType(tsft)
+        toFeatures = resultsToFeatures(tsft, None, None)
       }
 
-//      println("transform : " + tdefArg)
-//      println("transformS: " + tsftArg)
+    val remoteFilters: Seq[HBaseFilter] = (ecql, transform) match {
+      case (Some(cql), Some((tdef, tsft))) =>
+        tdefArg = tdef
+        tsftArg = SimpleFeatureTypes.encodeType(tsft)
+        Seq(new JSimpleFeatureFilter(sft, cql, tdefArg, tsftArg))
+      case (None, Some((tdef, tsft))) =>
+        tdefArg = tdef
+        tsftArg = SimpleFeatureTypes.encodeType(tsft)
+        Seq(new JSimpleFeatureFilter(sft, Filter.INCLUDE, tdefArg, tsftArg))
+      case (Some(cql), None) =>
+        Seq(new JSimpleFeatureFilter(sft, cql, tdefArg, tsftArg))
+      case _ => Seq()
+    }
 
-      val remoteFilters = ecql.map { filter =>
-        new JSimpleFeatureFilter(sft, filter, tdefArg, tsftArg)
-      }.toSeq
       ScanConfig(remoteFilters, toFeatures)
   }
 }
