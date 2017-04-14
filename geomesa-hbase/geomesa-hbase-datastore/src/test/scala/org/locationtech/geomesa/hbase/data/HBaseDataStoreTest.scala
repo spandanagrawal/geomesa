@@ -82,12 +82,12 @@ class HBaseDataStoreTest extends Specification with LazyLogging {
         logger.debug(s"Starting loose = $loose queries")
         forall(Seq(null, Array("geom"), Array("geom", "dtg"), Array("geom", "name"))) { transforms =>
           logger.debug(s"Starting queries with transforms = $transforms.")
-//          testQuery(ds, typeName, "INCLUDE", transforms, toAdd)
-//          testQuery(ds, typeName, "IN('0', '2')", transforms, Seq(toAdd(0), toAdd(2)))
-//          testQuery(ds, typeName, "bbox(geom,38,48,52,62) and dtg DURING 2014-01-01T00:00:00.000Z/2014-01-08T12:00:00.000Z", transforms, toAdd.dropRight(2))
-//          testQuery(ds, typeName, "bbox(geom,42,48,52,62)", transforms, toAdd.drop(2))
+          testQuery(ds, typeName, "INCLUDE", transforms, toAdd)
+          testQuery(ds, typeName, "IN('0', '2')", transforms, Seq(toAdd(0), toAdd(2)))
+          testQuery(ds, typeName, "bbox(geom,38,48,52,62) and dtg DURING 2014-01-01T00:00:00.000Z/2014-01-08T12:00:00.000Z", transforms, toAdd.dropRight(2))
+          testQuery(ds, typeName, "bbox(geom,42,48,52,62)", transforms, toAdd.drop(2))
           testQuery(ds, typeName, "name < 'name5'", transforms, toAdd.take(5))
-//          testQuery(ds, typeName, "name = 'name5'", transforms, Seq(toAdd(5)))
+          testQuery(ds, typeName, "name = 'name5'", transforms, Seq(toAdd(5)))
         }
       }
 
@@ -137,11 +137,11 @@ class HBaseDataStoreTest extends Specification with LazyLogging {
       val ids = fs.addFeatures(new ListFeatureCollection(sft, toAdd))
       ids.asScala.map(_.getID) must containTheSameElementsAs((0 until 10).map(_.toString))
 
-//      testQuery(ds, typeName, "INCLUDE", null, toAdd)
-//      testQuery(ds, typeName, "IN('0', '2')", null, Seq(toAdd(0), toAdd(2)))
-//      testQuery(ds, typeName, "bbox(geom,-126,38,-119,52) and dtg DURING 2014-01-01T00:00:00.000Z/2014-01-01T07:59:59.000Z", null, toAdd.dropRight(2))
-//      testQuery(ds, typeName, "bbox(geom,-126,42,-119,45)", null, toAdd.dropRight(4))
-//      testQuery(ds, typeName, "name < 'name5'", null, toAdd.take(5))
+      testQuery(ds, typeName, "INCLUDE", null, toAdd)
+      testQuery(ds, typeName, "IN('0', '2')", null, Seq(toAdd(0), toAdd(2)))
+      testQuery(ds, typeName, "bbox(geom,-126,38,-119,52) and dtg DURING 2014-01-01T00:00:00.000Z/2014-01-01T07:59:59.000Z", null, toAdd.dropRight(2))
+      testQuery(ds, typeName, "bbox(geom,-126,42,-119,45)", null, toAdd.dropRight(4))
+      testQuery(ds, typeName, "name < 'name5'", null, toAdd.take(5))
       testQuery(ds, typeName, "name = 'name5'", null, Seq(toAdd(5)))
     }
   }
