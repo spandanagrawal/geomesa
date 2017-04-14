@@ -82,7 +82,6 @@ class HBaseDataStoreTest extends Specification with LazyLogging {
         val ds = DataStoreFinder.getDataStore(params ++ Map(LooseBBoxParam.getName -> loose)).asInstanceOf[HBaseDataStore]
         logger.debug(s"Starting loose = $loose queries")
         forall(Seq(null, Array("geom"), Array("geom", "dtg"), Array("geom", "name"))) { transforms =>
-          logger.debug(s"Starting queries with transforms = $transforms.")
           testQuery(ds, typeName, "INCLUDE", transforms, toAdd)
           testQuery(ds, typeName, "IN('0', '2')", transforms, Seq(toAdd(0), toAdd(2)))
           testQuery(ds, typeName, "bbox(geom,38,48,52,62) and dtg DURING 2014-01-01T00:00:00.000Z/2014-01-08T12:00:00.000Z", transforms, toAdd.dropRight(2))
