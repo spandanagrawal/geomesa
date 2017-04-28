@@ -25,32 +25,31 @@ import org.locationtech.geomesa.utils.geotools.{GeometryUtils, SimpleFeatureType
 import org.locationtech.geomesa.utils.stats._
 import org.opengis.feature.simple.{SimpleFeature, SimpleFeatureType}
 import org.opengis.filter.Filter
+import org.locationtech.geomesa.index.utils.KryoLazyStatsUtils
 
 /**
  * Reads simple features and observe them with a Stat server-side
  *
  * Only works with z3IdxStrategy for now (queries that date filters)
  */
-class KryoLazyStatsIterator extends KryoLazyAggregatingIterator[Stat] {
+class KryoLazyStatsIterator extends KryoLazyAggregatingIterator[Stat] with KryoLazyStatsUtils {
 
   import org.locationtech.geomesa.accumulo.iterators.KryoLazyStatsIterator._
-
-  var serializer: StatSerializer = null
 
   override def init(options: Map[String, String]): Stat = {
     sft = IteratorCache.sft(options(KryoLazyAggregatingIterator.SFT_OPT))
     val transformSchema = options.get(TRANSFORM_SCHEMA_OPT).map(IteratorCache.sft).getOrElse(sft)
-    serializer = StatSerializer(transformSchema)
+    initialize(options, KryoLazyAggregatingIterator.SFT_OPT, TRANSFORM_SCHEMA_OPT)
 
     Stat(transformSchema, options(STATS_STRING_KEY))
   }
 
   override def aggregateResult(sf: SimpleFeature, result: Stat): Unit = result.observe(sf)
 
-  override def encodeResult(result: Stat): Array[Byte] = serializer.serialize(result)
+  override def encodeResult(result: Stat): Array[Byte] = encodeResult(result)
 }
 
-object KryoLazyStatsIterator extends LazyLogging {
+object KryoLazyStatsIterator extends LazyLogging with KryoLazyStatsUtils {
 
   import org.locationtech.geomesa.index.conf.QueryHints.{ENCODE_STATS, STATS_STRING}
 
@@ -58,7 +57,6 @@ object KryoLazyStatsIterator extends LazyLogging {
   val STATS_STRING_KEY = "geomesa.stats.string"
   val STATS_FEATURE_TYPE_KEY = "geomesa.stats.featuretype"
   // Need a filler namespace, else geoserver throws NPE for xml output
-  val StatsSft = SimpleFeatureTypes.createType("stats:stats", "stats:String,geom:Geometry")
 
   def configure(sft: SimpleFeatureType,
                 index: AccumuloFeatureIndexType,

@@ -13,10 +13,13 @@ import org.geotools.filter.text.ecql.ECQL
 import org.geotools.util.Converters
 import org.locationtech.geomesa.features.SerializationOption.SerializationOptions
 import org.locationtech.geomesa.features.kryo.KryoFeatureSerializer
+import org.locationtech.geomesa.index.iterators.IteratorCache
 import org.locationtech.geomesa.utils.geotools.GridSnap
 import org.locationtech.geomesa.utils.interop.SimpleFeatureTypes
+import org.locationtech.geomesa.utils.stats.StatSerializer
 import org.opengis.feature.simple.{SimpleFeature, SimpleFeatureType}
 import org.opengis.filter.expression.Expression
+import org.locationtech.geomesa.utils.stats._
 
 import scala.collection.mutable
 
@@ -176,4 +179,17 @@ object KryoLazyDensityUtils {
       }
     }
   }
+}
+
+trait KryoLazyStatsUtils {
+  var serializer: StatSerializer = _
+  var StatsSft: SimpleFeatureType = SimpleFeatureTypes.createType("stats:stats", "stats:String,geom:Geometry")
+
+  def initialize(options: Map[String, String], SFT_OPT: String, TRANSFORM_SCHEMA_OPT: String): Unit = {
+    val sft = IteratorCache.sft(options(SFT_OPT))
+    val transformSchema = options.get(TRANSFORM_SCHEMA_OPT).map(IteratorCache.sft).getOrElse(sft)
+    serializer = StatSerializer(transformSchema)
+  }
+
+  def encodeResult(result: Stat): Array[Byte] = serializer.serialize(result)
 }
